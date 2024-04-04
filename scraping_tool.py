@@ -15,14 +15,18 @@ import webbrowser
 
 ### 定義 ###
 
-# SUUMO_URL定義の際はURLの最後に &page={}をつける
-SUUMO_URL = "https://suumo.jp/jj/chintai/ichiran/FR301FC001/?ar=090&bs=040&pc=50&smk=&po1=25&po2=99&tc=0400502&shkr1=03&shkr2=03&shkr3=03&shkr4=03&sc=40131&ta=40&cb=0.0&ct=5.0&et=10&mb=0&mt=9999999&cn=15&tc=0400301&fw2=&page={}"
+# SUUMO_URL
+BASE_URL = "https://suumo.jp/jj/chintai/ichiran/FR301FC001/?ar=090&bs=040&ta=40&sc=40131&sc=40132&sc=40133&sc=40134&sc=40135&sc=40136&sc=40137&cb=0.0&ct=6.5&mb=0&mt=9999999&et=10&cn=15&tc=0400502&tc=0400301&shkr1=03&shkr2=03&shkr3=03&shkr4=03&sngz=&po1=25&pc=50"
+PAGE_FMT = "&page={}"
+SUUMO_URL = BASE_URL + PAGE_FMT
+MAX_PAGE = 2 # 取得対象のページ数
 
+# API
 KOKUDO_API = "https://msearch.gsi.go.jp/address-search/AddressSearch?q="            # 国土地理院API
 ZIPCODA_API = "http://zipcoda.net/api?address="                                     # 郵便番号取得API
 HRG_API =   "http://geoapi.heartrails.com/api/json?method=searchByPostal&postal="   # HeartRails Geo API
 
-MAX_PAGE = 4 # 取得対象のページ数
+# OUTPUT
 CSV_FILE_PATH = "fukuokashi_data.csv"
 HTML_FILE_PATH = "fukuoka.html"
 
