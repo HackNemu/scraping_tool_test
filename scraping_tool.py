@@ -10,7 +10,6 @@ import folium
 from folium.plugins import MarkerCluster
 import time
 import random
-import webbrowser
 
 
 ### 定義 ###
@@ -19,7 +18,7 @@ import webbrowser
 BASE_URL = "https://suumo.jp/jj/chintai/ichiran/FR301FC001/?ar=090&bs=040&ta=40&sc=40131&sc=40132&sc=40133&sc=40134&sc=40135&sc=40136&sc=40137&cb=0.0&ct=6.5&mb=0&mt=9999999&et=10&cn=15&tc=0400502&tc=0400301&shkr1=03&shkr2=03&shkr3=03&shkr4=03&sngz=&po1=25&pc=50"
 PAGE_FMT = "&page={}"
 SUUMO_URL = BASE_URL + PAGE_FMT
-MAX_PAGE = 2 # 取得対象のページ数
+MAX_PAGE = 1 # 取得対象のページ数
 
 # API
 KOKUDO_API = "https://msearch.gsi.go.jp/address-search/AddressSearch?q="            # 国土地理院API
@@ -40,9 +39,10 @@ class ScraperGUI:
         self.completed_records = 0  # 処理完了の件数
         self.scraping_thread = None  # スレッド属性の追加
 
+        # ウィンドウの設定
         self.root = Tk()
         self.root.title("不動産情報スクレイピング")
-        self.root.geometry("300x150")  # ウィンドウのサイズを設定
+        self.root.geometry("300x150")  
 
         # フォントの設定
         self.custom_font = font.Font(family="Helvetica", size=10)
@@ -79,12 +79,13 @@ class ScraperGUI:
         
         self.root.mainloop()
 
+    # 画面表示データ初期化
     def gui_init(self):
         self.current_count_text.set(f"処理完了: {0}")
         self.total_count_text.set(f"総件数: {0}")
         self.update_progressbar(0)
 
-
+    # スクレイピング開始
     def start_scraping(self):
         if not self.scraping_thread:
             self.stop_scraping_flg = False  # スクレイピング中断用フラグ
@@ -93,7 +94,7 @@ class ScraperGUI:
             self.scraping_thread = threading.Thread(target=self.scrape_and_create_map)
             self.scraping_thread.start()
  
-
+    # スクレイピング中断
     def stop_scraping_thread(self):
         if self.scraping_thread and self.scraping_thread.is_alive():
             confirmed = confirmed = messagebox.askquestion("スクレイピング", "スクレイピング処理を中断しますか？")
@@ -101,6 +102,7 @@ class ScraperGUI:
             if confirmed == "yes":
                 self.stop_scraping_flg = True
 
+    # スクレイピング と マップ生成 (別スレッドで処理)
     def scrape_and_create_map(self):
         scraped_data = self.scrape_suumo_data(self.base_url, self.max_page)
         df = pd.DataFrame(scraped_data)
@@ -108,19 +110,15 @@ class ScraperGUI:
         self.create_map_and_markers(df)
         df.to_csv(CSV_FILE_PATH, encoding="utf-8")
 
-        # 中断処理
         if not self.stop_scraping_flg:
             messagebox.showinfo("スクレイピング完了", "スクレイピングが完了しました。")
         else:
             messagebox.showinfo("スクレイピング中止", "スクレイピングが中止されました。")
 
         self.scraping_thread = None  # 処理完了のためスレッド初期化
-
-        # 発表用に自動でHTMLを開けるようにしておく
-        webbrowser.open(HTML_FILE_PATH)  # HTMLファイルをデフォルトのWebブラウザで開く   
         
     def update_progressbar(self, value):
-        self.progress["value"] = value * 10 # 小数点第一位をバーに反映するため
+        self.progress["value"] = value * 10 # 小数点第1位をバーに反映するため
         self.root.update_idletasks()  # GUIの更新
 
     ### Scraping ###
@@ -152,10 +150,13 @@ class ScraperGUI:
             if self.stop_scraping_flg:
                 break
 
+            # Webから取得
             url = base_url.format(page)
             soup = self.get_html(url)
             items = soup.findAll("div", {"class": "cassetteitem"})
             print("page", page, "items", len(items))
+
+            # 解析
             for item in items:
                 stations = item.findAll("div", {"class": "cassetteitem_detail-text"})
                 for station in stations:
@@ -213,7 +214,7 @@ class ScraperGUI:
                 longitude = r[0]['geometry']['coordinates'][0]  #経度
                 latitude = r[0]['geometry']['coordinates'][1]   #緯度
             else:
-                # 国土地理院APIで戻ってこない住所があるための対策
+                # 国土地理院APIで戻ってこない住所があるための対策 例：福岡県福岡市西区田尻東3
                 url = ZIPCODA_API + address
                 r = requests.get(url)
                 postal = str(r.json()['items'][0]['zipcode']) #郵便番号
@@ -225,11 +226,17 @@ class ScraperGUI:
             print(f"Error fetching location info for address '{address},{url}': {e}")
             return None, None
         
-    #マップ生成、マーカー生成
+    # マッピング処理
     def create_map_and_markers(self, df):
         count = 0
+        
+        # マップ生成
         m = folium.Map(location=[33.5903, 130.4017], zoom_start=13)
+
+        # クラスター追加
         marker_cluster = MarkerCluster().add_to(m)
+        
+        # マッピング開始
         added_list = []
         for index, row in df.iterrows():
             # 中断処理
@@ -244,23 +251,39 @@ class ScraperGUI:
             house_layout = row["間取り"]
             house_area = row["面積"]
             house_age = row["築年数"]
+
+            # 緯度経度
             longitude, latitude = self.get_location_info(address)
+
+            # 緯度、経度の取得状況確認
             if longitude is not None and latitude is not None:
                 added_list.append((longitude, latitude))
+
+                # 重複する緯度経度の調査(重複した場合にマーカーが消える対策)
                 for coord in added_list:
                     if added_list.count(coord) > 1:
                         cnt = added_list.count(coord)
+                        
+                        # 重複した数だけ動かす
                         longitude += random.uniform(-0.0001, 0.0001) * cnt
                         latitude += random.uniform(-0.0001, 0.0001) * cnt
                         break
+
+                # マーカーに表示する部分生成
                 content_url = f'<a href="{suumo_url}">{suumo_url}</a>'
                 popup_content = self.get_marker_popup_content(name, address, rent, house_layout, house_area, house_age, content_url, icon_url)
+
+                # 
                 folium.Marker([latitude, longitude], tooltip=name, popup=popup_content).add_to(marker_cluster)
                 time.sleep(1)
             else:
+                # 緯度、経度情報なし
                 print(name, suumo_url)
 
+
             print(f"追加完了:{name}")
+
+            # プログレスバーの計算
             count += 1
             complete_ratio = round(count/len(df)*100,3)
             self.update_progressbar(complete_ratio)
